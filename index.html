@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>엑셀 손익 n배 변환기</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+      background: #f5f7fb;
+      color: #1f2937;
+    }
+    .wrap {
+      max-width: 900px;
+      margin: 40px auto;
+      padding: 24px;
+    }
+    .card {
+      background: #fff;
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+    }
+    h1 {
+      margin: 0 0 12px;
+      font-size: 28px;
+    }
+    p.desc {
+      margin: 0 0 20px;
+      line-height: 1.6;
+      color: #4b5563;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 220px;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    label {
+      font-weight: 700;
+      font-size: 14px;
+    }
+    input[type="file"],
+    input[type="number"],
+    input[type="text"] {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1px solid #d1d5db;
+      border-radius: 10px;
+      font-size: 15px;
+      background: #fff;
+    }
+    .targets {
+      margin: 16px 0;
+      padding: 14px;
+      border-radius: 12px;
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+    }
+    .targets small {
+      display: block;
+      margin-bottom: 8px;
+      color: #6b7280;
+    }
+    .inline {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .inline code {
+      background: #eef2ff;
+      color: #3730a3;
+      padding: 4px 8px;
+      border-radius: 8px;
+    }
+    .actions {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 18px;
+    }
+    button {
+      border: 0;
+      border-radius: 10px;
+      padding: 12px 18px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    button.primary {
+      background: #2563eb;
+      color: #fff;
+    }
+    button.secondary {
+      background: #e5e7eb;
+      color: #111827;
+    }
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .status {
+      margin-top: 18px;
+      padding: 14px;
+      border-radius: 12px;
+      background: #0f172a;
+      color: #e5e7eb;
+      min-height: 160px;
+      white-space: pre-wrap;
+      line-height: 1.5;
+      font-family: Consolas, Monaco, monospace;
+      font-size: 13px;
+      overflow: auto;
+    }
+    .hint {
+      margin-top: 14px;
+      color: #6b7280;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    @media (max-width: 768px) {
+      .grid { grid-template-columns: 1fr; }
+      .wrap { margin: 20px auto; padding: 16px; }
+      .card { padding: 18px; }
+      h1 { font-size: 24px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>엑셀 손익 n배 변환기</h1>
+      <p class="desc">
+        업로드한 엑셀 파일에서 <strong>확정손익금</strong>, <strong>미실현손익</strong>, <strong>순이익</strong> 라벨을 찾아
+        <strong>바로 오른쪽 숫자 셀</strong>을 지정한 배수로 변경한 뒤 새 파일로 다운로드합니다.
+        로직 열이 4개든, 5개든, 6개든, 7개 이상이든 상관없이 <strong>고정 열(C/F/I/L 등)에 의존하지 않고 전체 시트를 스캔</strong>합니다.
+      </p>
+
+      <div class="grid">
+        <div class="field">
+          <label for="fileInput">엑셀 파일 업로드</label>
+          <input id="fileInput" type="file" accept=".xlsx,.xlsm,.xltx,.xltm" />
+        </div>
+
+        <div class="field">
+          <label for="multiplier">배수(n)</label>
+          <input id="multiplier" type="number" step="any" value="2" placeholder="예: 2" />
+        </div>
+      </div>
+
+      <div class="targets">
+        <small>기본 대상 라벨</small>
+        <div class="inline">
+          <code>확정손익금</code>
+          <code>미실현손익</code>
+          <code>순이익</code>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="targetInput">대상 라벨 직접 수정</label>
+        <input id="targetInput" type="text" value="확정손익금, 미실현손익, 순이익" />
+      </div>
+
+      <div class="actions">
+        <button id="runBtn" class="primary">변환 후 다운로드</button>
+        <button id="sampleBtn" class="secondary" type="button">기본 라벨로 되돌리기</button>
+      </div>
+
+      <div id="status" class="status">준비 완료</div>
+
+      <div class="hint">
+        참고: 대상 라벨 셀이 늘어나도 그대로 동작합니다. 예를 들어 로직1~로직10처럼 열 수가 늘어나도,
+        시트 전체에서 해당 문구를 찾아 오른쪽 셀만 바꾸는 방식이라 추가 수정 없이 사용할 수 있습니다.
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+  <script>
+    const fileInput = document.getElementById('fileInput');
+    const multiplierInput = document.getElementById('multiplier');
+    const targetInput = document.getElementById('targetInput');
+    const runBtn = document.getElementById('runBtn');
+    const sampleBtn = document.getElementById('sampleBtn');
+    const statusEl = document.getElementById('status');
+
+    const DEFAULT_TARGETS = ['확정손익금', '미실현손익', '순이익'];
+
+    function log(message, reset = false) {
+      if (reset) statusEl.textContent = '';
+      statusEl.textContent += (statusEl.textContent ? '\n' : '') + message;
+      statusEl.scrollTop = statusEl.scrollHeight;
+    }
+
+    function parseTargets(text) {
+      return [...new Set(
+        String(text)
+          .split(',')
+          .map(v => v.trim())
+          .filter(Boolean)
+      )];
+    }
+
+    function isNumeric(value) {
+      return typeof value === 'number' && Number.isFinite(value);
+    }
+
+    function multiplyCellValue(cell, multiplier) {
+      const value = cell.value;
+
+      if (typeof value === 'number') {
+        cell.value = roundSmart(value * multiplier);
+        return true;
+      }
+
+      if (value && typeof value === 'object') {
+        if (typeof value.result === 'number') {
+          const oldFormula = value.formula || null;
+          cell.value = {
+            formula: oldFormula ? `(${oldFormula})*(${multiplier})` : undefined,
+            result: roundSmart(value.result * multiplier),
+            date1904: value.date1904
+          };
+          return true;
+        }
+
+        if (typeof value.formula === 'string' && typeof value.result !== 'number') {
+          cell.value = {
+            formula: `(${value.formula})*(${multiplier})`
+          };
+          return true;
+        }
+      }
+
+      return false;
+    }
+
+    function roundSmart(num) {
+      return Math.round((num + Number.EPSILON) * 100000000) / 100000000;
+    }
+
+    function getOutputFileName(originalName, multiplier) {
+      const dotIndex = originalName.lastIndexOf('.');
+      const base = dotIndex >= 0 ? originalName.slice(0, dotIndex) : originalName;
+      const ext = dotIndex >= 0 ? originalName.slice(dotIndex) : '.xlsx';
+      return `${base}_손익${String(multiplier).replace(/\./g, '_')}배${ext}`;
+    }
+
+    async function processWorkbook(file, multiplier, targets) {
+      const workbook = new ExcelJS.Workbook();
+      const buffer = await file.arrayBuffer();
+      await workbook.xlsx.load(buffer);
+
+      let totalChanged = 0;
+      let totalFound = 0;
+      const targetSet = new Set(targets);
+
+      workbook.worksheets.forEach((worksheet) => {
+        let sheetFound = 0;
+        let sheetChanged = 0;
+
+        worksheet.eachRow({ includeEmpty: false }, (row) => {
+          row.eachCell({ includeEmpty: false }, (cell, colNumber) => {
+            const cellText = String(cell.text ?? cell.value ?? '').trim();
+
+            if (!targetSet.has(cellText)) return;
+
+            sheetFound += 1;
+            totalFound += 1;
+
+            const targetCell = row.getCell(colNumber + 1);
+            const changed = multiplyCellValue(targetCell, multiplier);
+
+            if (changed) {
+              sheetChanged += 1;
+              totalChanged += 1;
+            }
+          });
+        });
+
+        log(`[${worksheet.name}] 대상 라벨 ${sheetFound}개 발견 / 값 변경 ${sheetChanged}개`);
+      });
+
+      log(`총 대상 라벨 발견: ${totalFound}개`);
+      log(`총 값 변경 완료: ${totalChanged}개`);
+
+      if (totalFound === 0) {
+        throw new Error('대상 라벨을 찾지 못했습니다. 라벨명을 다시 확인해 주세요.');
+      }
+
+      if (totalChanged === 0) {
+        throw new Error('대상 라벨은 찾았지만 오른쪽 셀에서 숫자 또는 수식 값을 변경하지 못했습니다. 파일 구조를 확인해 주세요.');
+      }
+
+      return workbook.xlsx.writeBuffer();
+    }
+
+    function downloadBuffer(buffer, fileName) {
+      const blob = new Blob([buffer], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    sampleBtn.addEventListener('click', () => {
+      targetInput.value = DEFAULT_TARGETS.join(', ');
+      log('대상 라벨을 기본값으로 복원했습니다.', true);
+    });
+
+    runBtn.addEventListener('click', async () => {
+      const file = fileInput.files[0];
+      const multiplier = Number(multiplierInput.value);
+      const targets = parseTargets(targetInput.value);
+
+      log('작업 시작', true);
+
+      if (!file) {
+        log('엑셀 파일을 먼저 선택해 주세요.');
+        return;
+      }
+
+      if (!Number.isFinite(multiplier)) {
+        log('배수(n)는 숫자로 입력해 주세요.');
+        return;
+      }
+
+      if (targets.length === 0) {
+        log('대상 라벨을 1개 이상 입력해 주세요.');
+        return;
+      }
+
+      runBtn.disabled = true;
+
+      try {
+        log(`파일명: ${file.name}`);
+        log(`배수: ${multiplier}`);
+        log(`대상 라벨: ${targets.join(', ')}`);
+
+        const outputBuffer = await processWorkbook(file, multiplier, targets);
+        const outputName = getOutputFileName(file.name, multiplier);
+
+        downloadBuffer(outputBuffer, outputName);
+        log(`다운로드 완료: ${outputName}`);
+      } catch (error) {
+        console.error(error);
+        log(`오류: ${error.message}`);
+      } finally {
+        runBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
