@@ -1,368 +1,999 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>엑셀 손익 n배 변환기</title>
+  <title>거래로직 분석 + 손익 n배 적용 도구</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+  <script>
+    (function () {
+      function loadFallback() {
+        var s = document.createElement("script");
+        s.src = "https://unpkg.com/xlsx-js-style@1.2.0/dist/xlsx.bundle.js";
+        s.onload = function () { console.log("[XLSX] fallback loaded"); };
+        s.onerror = function () { console.warn("[XLSX] fallback load failed"); };
+        document.head.appendChild(s);
+      }
+      window.addEventListener("load", function () {
+        if (!window.XLSX) loadFallback();
+      });
+    })();
+  </script>
+
   <style>
-    * { box-sizing: border-box; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      margin: 0;
-      font-family: Arial, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
-      background: #f5f7fb;
-      color: #1f2937;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif;
+      background: #f5f5f5;
+      color: #333;
     }
-    .wrap {
-      max-width: 900px;
-      margin: 40px auto;
-      padding: 24px;
-    }
-    .card {
-      background: #fff;
-      border-radius: 16px;
-      padding: 24px;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.08);
-    }
-    h1 {
-      margin: 0 0 12px;
-      font-size: 28px;
-    }
-    p.desc {
-      margin: 0 0 20px;
-      line-height: 1.6;
-      color: #4b5563;
-    }
-    .grid {
+
+    .container {
       display: grid;
-      grid-template-columns: 1fr 220px;
-      gap: 16px;
-      margin-bottom: 16px;
+      grid-template-columns: 320px 1fr;
+      grid-template-rows: auto 1fr auto;
+      height: 100vh;
     }
-    .field {
+
+    header {
+      grid-column: 1 / -1;
+      background: linear-gradient(135deg, #1e8449 0%, #16a085 100%);
+      color: white;
+      padding: 18px 20px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
       display: flex;
-      flex-direction: column;
-      gap: 8px;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
     }
-    label {
-      font-weight: 700;
-      font-size: 14px;
-    }
-    input[type="file"],
-    input[type="number"],
-    input[type="text"] {
-      width: 100%;
-      padding: 12px 14px;
-      border: 1px solid #d1d5db;
-      border-radius: 10px;
-      font-size: 15px;
-      background: #fff;
-    }
-    .targets {
-      margin: 16px 0;
+    header h1 { font-size: 20px; font-weight: 700; }
+
+    .left-panel {
+      grid-column: 1;
+      grid-row: 2;
+      background: white;
+      border-right: 1px solid #e0e0e0;
+      overflow-y: auto;
       padding: 14px;
-      border-radius: 12px;
-      background: #f9fafb;
-      border: 1px solid #e5e7eb;
     }
-    .targets small {
-      display: block;
-      margin-bottom: 8px;
-      color: #6b7280;
+
+    .main-content {
+      grid-column: 2;
+      grid-row: 2;
+      background: white;
+      overflow-y: auto;
+      padding: 18px;
     }
-    .inline {
+
+    footer {
+      grid-column: 1 / -1;
+      background: #f9f9f9;
+      border-top: 1px solid #e0e0e0;
+      padding: 12px 16px;
       display: flex;
       gap: 10px;
+      justify-content: center;
       flex-wrap: wrap;
+    }
+
+    .left-panel-header {
+      font-weight: 800;
+      font-size: 14px;
+      color: #1e8449;
+      margin-bottom: 10px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid #1e8449;
+    }
+
+    .add-logic-group-btn {
+      width: 100%;
+      background: #1e8449;
+      color: white;
+      border: none;
+      padding: 10px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      margin-bottom: 12px;
+      font-weight: 800;
+    }
+    .add-logic-group-btn:hover { background: #16a085; }
+
+    .logic-group {
+      background: #f9f9f9;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      margin-bottom: 12px;
+      overflow: hidden;
+    }
+
+    .logic-group-header {
+      background: #e8f4f8;
+      padding: 10px 12px;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #d0d0d0;
+    }
+    .logic-group-header:hover { background: #d4ebf0; }
+
+    .logic-group-title {
+      font-weight: 800;
+      font-size: 13px;
+      color: #1e8449;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .toggle-icon { display: inline-block; transition: transform 0.2s; }
+    .toggle-icon.collapsed { transform: rotate(-90deg); }
+
+    .logic-group-subtitle {
+      font-size: 12px;
+      color: #666;
+      margin-top: 2px;
+      font-weight: 600;
+    }
+
+    .logic-group-header-controls {
+      display: flex;
+      gap: 6px;
       align-items: center;
     }
-    .inline code {
-      background: #eef2ff;
-      color: #3730a3;
-      padding: 4px 8px;
-      border-radius: 8px;
-    }
-    .actions {
-      display: flex;
-      gap: 12px;
-      flex-wrap: wrap;
-      margin-top: 18px;
-    }
-    button {
-      border: 0;
-      border-radius: 10px;
-      padding: 12px 18px;
-      font-size: 15px;
+
+    .delete-logic-group {
+      background: #ff6b6b;
+      color: white;
+      border: none;
+      padding: 5px 8px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 11px;
       font-weight: 700;
+    }
+    .delete-logic-group:hover { background: #ff5252; }
+
+    .logic-group-content { padding: 12px; }
+    .logic-group-content.hidden { display: none; }
+
+    .field { margin-bottom: 10px; }
+    .field label {
+      display: block;
+      font-size: 11px;
+      color: #666;
+      margin-bottom: 6px;
+      font-weight: 700;
+    }
+    .field input[type="text"],
+    .field input[type="number"] {
+      width: 100%;
+      padding: 8px 8px;
+      font-size: 12px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      outline: none;
+    }
+    .field input[type="text"]:focus,
+    .field input[type="number"]:focus {
+      border-color: #16a085;
+      box-shadow: 0 0 0 3px rgba(22,160,133,0.12);
+    }
+
+    .field input[type="file"] {
+      width: 100%;
+      font-size: 12px;
       cursor: pointer;
     }
-    button.primary {
-      background: #2563eb;
-      color: #fff;
+
+    .file-item {
+      background: white;
+      padding: 8px 10px;
+      margin-bottom: 6px;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      gap: 8px;
     }
-    button.secondary {
-      background: #e5e7eb;
-      color: #111827;
+    .file-name { flex: 1; word-break: break-all; color: #444; font-weight: 600; }
+
+    .btn-small {
+      background: #ff6b6b;
+      color: white;
+      border: none;
+      padding: 6px 8px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 700;
+      white-space: nowrap;
     }
-    button:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-    .status {
-      margin-top: 18px;
+    .btn-small:hover { background: #ff5252; }
+
+    .controls-section {
+      background: #f9f9f9;
       padding: 14px;
-      border-radius: 12px;
-      background: #0f172a;
-      color: #e5e7eb;
-      min-height: 160px;
-      white-space: pre-wrap;
-      line-height: 1.5;
-      font-family: Consolas, Monaco, monospace;
-      font-size: 13px;
-      overflow: auto;
+      border-radius: 10px;
+      border: 1px solid #eee;
+      margin-bottom: 14px;
     }
-    .hint {
-      margin-top: 14px;
-      color: #6b7280;
+    .controls-section h3 {
+      margin-bottom: 10px;
+      color: #1e8449;
       font-size: 14px;
-      line-height: 1.6;
+      font-weight: 900;
     }
-    @media (max-width: 768px) {
-      .grid { grid-template-columns: 1fr; }
-      .wrap { margin: 20px auto; padding: 16px; }
-      .card { padding: 18px; }
-      h1 { font-size: 24px; }
+
+    .control-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+    }
+
+    .control-group label {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .control-group input[type="checkbox"] {
+      cursor: pointer;
+      width: 16px;
+      height: 16px;
+    }
+
+    .control-group input[type="number"] {
+      padding: 7px 9px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 12px;
+      width: 110px;
+      outline: none;
+    }
+    .control-group input[type="number"]:disabled { opacity: 0.55; }
+
+    .btn-secondary {
+      background: #666;
+      color: white;
+      border: none;
+      padding: 8px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 800;
+    }
+    .btn-secondary:hover { background: #555; }
+
+    .table-wrapper {
+      overflow-x: auto;
+      border: 1px solid #eee;
+      border-radius: 10px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      min-width: 900px;
+    }
+
+    thead th {
+      background: #1e8449;
+      color: white;
+      padding: 10px;
+      text-align: center;
+      font-weight: 900;
+      border: 1px solid #155a3a;
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      white-space: nowrap;
+    }
+
+    thead th.spacer-th {
+      background: #ffffff !important;
+      color: transparent !important;
+      border: none !important;
+      min-width: 14px;
+      padding: 0 !important;
+    }
+
+    tbody td {
+      padding: 8px 10px;
+      border: 1px solid #e6e6e6;
+      text-align: center;
+      white-space: nowrap;
+    }
+
+    tbody td.group-name {
+      text-align: left;
+      font-weight: 900;
+      color: #1e8449;
+    }
+
+    tbody td.metric {
+      color: #666;
+      font-weight: 800;
+      text-align: left;
+      background: #fcfcfc;
+    }
+
+    tbody td.subtitle-cell {
+      font-weight: 900;
+      color: #222;
+      text-align: center;
+      background: #ffffff;
+    }
+
+    tbody td.spacer-td {
+      border: none !important;
+      background: transparent !important;
+      padding: 0 !important;
+      min-width: 14px;
+    }
+
+    .hl {
+      background: #E8F5E9 !important;
+    }
+
+    .btn-primary {
+      background: #1e8449;
+      color: white;
+      border: none;
+      padding: 10px 18px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 900;
+      transition: background 0.2s;
+    }
+    .btn-primary:hover { background: #16a085; }
+
+    .btn-danger { background: #ff6b6b !important; }
+    .btn-danger:hover { background: #ff5252 !important; }
+
+    .hint {
+      font-size: 12px;
+      color: #666;
+      font-weight: 700;
+      line-height: 1.45;
+    }
+
+    .value-badge {
+      display: inline-block;
+      background: rgba(255,255,255,0.15);
+      border: 1px solid rgba(255,255,255,0.25);
+      padding: 6px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 800;
+      white-space: nowrap;
     }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <div class="card">
-      <h1>엑셀 손익 n배 변환기</h1>
-      <p class="desc">
-        업로드한 엑셀 파일에서 <strong>확정손익금</strong>, <strong>미실현손익</strong>, <strong>순이익</strong> 라벨을 찾아
-        <strong>바로 오른쪽 숫자 셀</strong>을 지정한 배수로 변경한 뒤 새 파일로 다운로드합니다.
-        로직 열이 4개든, 5개든, 6개든, 7개 이상이든 상관없이 <strong>고정 열(C/F/I/L 등)에 의존하지 않고 전체 시트를 스캔</strong>합니다.
-      </p>
+  <div class="container">
+    <header>
+      <h1>📊 거래로직 분석 + 손익 n배 적용 도구</h1>
+      <div class="value-badge">확정손익금 · 미실현손익 · 순이익만 n배 적용</div>
+    </header>
 
-      <div class="grid">
-        <div class="field">
-          <label for="fileInput">엑셀 파일 업로드</label>
-          <input id="fileInput" type="file" accept=".xlsx,.xlsm,.xltx,.xltm" />
+    <div class="left-panel">
+      <div class="left-panel-header">로직 집단</div>
+      <button class="add-logic-group-btn" onclick="addLogicGroup()">+ 로직 집단 추가</button>
+      <div id="logicGroupsContainer"></div>
+    </div>
+
+    <div class="main-content">
+      <div class="controls-section">
+        <h3>배수 및 필터 조건</h3>
+
+        <div class="control-row">
+          <div class="control-group">
+            <label for="multiplierInput">손익 배수 n</label>
+          </div>
+          <div class="control-group">
+            <input type="number" id="multiplierInput" value="1" step="any" onchange="renderAll()">
+          </div>
+          <div class="hint">확정손익금 / 미실현손익 / 순이익에만 적용되고, 익절횟수와 손절횟수는 그대로 유지됩니다.</div>
         </div>
 
-        <div class="field">
-          <label for="multiplier">배수(n)</label>
-          <input id="multiplier" type="number" step="any" value="2" placeholder="예: 2" />
+        <div class="control-row">
+          <div class="control-group">
+            <label>
+              <input type="checkbox" id="filterStopLoss" onchange="renderAll()">
+              손절횟수 n 이하 강조
+            </label>
+          </div>
+          <div class="control-group">
+            <input type="number" id="stopLossThreshold" value="0" min="0" onchange="renderAll()" disabled>
+          </div>
+        </div>
+
+        <div class="control-row">
+          <div class="control-group">
+            <label>
+              <input type="checkbox" id="filterPositiveProfit" onchange="renderAll()">
+              순이익이 양수 강조
+            </label>
+          </div>
+
+          <div class="control-group">
+            <label>
+              <input type="checkbox" id="filterPositiveRealizedProfit" onchange="renderAll()">
+              확정손익금이 양수 강조
+            </label>
+          </div>
+
+          <button class="btn-secondary" onclick="clearAllFilters()">필터 초기화</button>
+        </div>
+
+        <div class="hint">
+          - 로직 파일은 <b>Total_Result</b> 시트를 우선 사용하고, 없으면 첫 시트를 사용합니다.<br/>
+          - 파일 내부에서 <b>‘Group Name’ 헤더가 있는 행</b>부터 자동 인식합니다.<br/>
+          - 같은 로직 집단 안에서 그룹명이 같으면 <b>익절횟수 / 손절횟수 / 확정손익금 / 미실현손익 / 순이익</b>을 먼저 합산한 뒤,<br/>
+          &nbsp;&nbsp;그 다음 <b>확정손익금 / 미실현손익 / 순이익</b>에만 n배를 적용합니다.<br/>
+          - 결과 엑셀은 로직별 2칸 블록 + 로직 사이 1칸 공백 + 부제목 행 + 그룹당 6행 구조로 정리됩니다.
         </div>
       </div>
 
-      <div class="targets">
-        <small>기본 대상 라벨</small>
-        <div class="inline">
-          <code>확정손익금</code>
-          <code>미실현손익</code>
-          <code>순이익</code>
-        </div>
-      </div>
-
-      <div class="field">
-        <label for="targetInput">대상 라벨 직접 수정</label>
-        <input id="targetInput" type="text" value="확정손익금, 미실현손익, 순이익" />
-      </div>
-
-      <div class="actions">
-        <button id="runBtn" class="primary">변환 후 다운로드</button>
-        <button id="sampleBtn" class="secondary" type="button">기본 라벨로 되돌리기</button>
-      </div>
-
-      <div id="status" class="status">준비 완료</div>
-
-      <div class="hint">
-        참고: 대상 라벨 셀이 늘어나도 그대로 동작합니다. 예를 들어 로직1~로직10처럼 열 수가 늘어나도,
-        시트 전체에서 해당 문구를 찾아 오른쪽 셀만 바꾸는 방식이라 추가 수정 없이 사용할 수 있습니다.
+      <div class="table-wrapper">
+        <table id="resultTable">
+          <thead id="resultThead"></thead>
+          <tbody id="resultTbody">
+            <tr><td style="padding:18px; color:#999; text-align:center;">아직 데이터가 없습니다. 왼쪽에서 로직 집단에 엑셀을 업로드하세요.</td></tr>
+          </tbody>
+        </table>
       </div>
     </div>
+
+    <footer>
+      <button class="btn-primary" onclick="downloadResultExcel()">📥 결과 엑셀 다운로드</button>
+      <button class="btn-primary btn-danger" onclick="resetAll()">🗑️ 전체 초기화</button>
+    </footer>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
   <script>
-    const fileInput = document.getElementById('fileInput');
-    const multiplierInput = document.getElementById('multiplier');
-    const targetInput = document.getElementById('targetInput');
-    const runBtn = document.getElementById('runBtn');
-    const sampleBtn = document.getElementById('sampleBtn');
-    const statusEl = document.getElementById('status');
+    let logicGroups = [];
 
-    const DEFAULT_TARGETS = ['확정손익금', '미실현손익', '순이익'];
-
-    function log(message, reset = false) {
-      if (reset) statusEl.textContent = '';
-      statusEl.textContent += (statusEl.textContent ? '\n' : '') + message;
-      statusEl.scrollTop = statusEl.scrollHeight;
+    function uid() {
+      return Date.now().toString(36) + Math.random().toString(36).slice(2);
     }
 
-    function parseTargets(text) {
-      return [...new Set(
-        String(text)
-          .split(',')
-          .map(v => v.trim())
-          .filter(Boolean)
-      )];
+    function toNum(v) {
+      if (v === null || v === undefined || v === "") return 0;
+      if (typeof v === "number") return v;
+      const s = String(v).replace(/,/g, "").trim();
+      const n = parseFloat(s);
+      return Number.isFinite(n) ? n : 0;
     }
 
-    function isNumeric(value) {
-      return typeof value === 'number' && Number.isFinite(value);
+    function getMultiplier() {
+      const n = parseFloat(document.getElementById("multiplierInput").value);
+      return Number.isFinite(n) ? n : 1;
     }
 
-    function multiplyCellValue(cell, multiplier) {
-      const value = cell.value;
+    function round2(v) {
+      return Math.round(toNum(v) * 100) / 100;
+    }
 
-      if (typeof value === 'number') {
-        cell.value = roundSmart(value * multiplier);
-        return true;
+    function fmtInt(v) {
+      const n = Math.round(toNum(v));
+      return Number.isFinite(n) ? String(n) : "";
+    }
+
+    function fmtFloat2(v) {
+      const n = toNum(v);
+      if (!Number.isFinite(n)) return "";
+      return (Math.round(n * 100) / 100).toFixed(2).replace(/\.00$/, "");
+    }
+
+    function escapeHtml(s) {
+      return String(s)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    function logicStartCol(i) {
+      return 2 + i * 3;
+    }
+
+    function getMetricValue(v, key, multiplier) {
+      if (!v) return "";
+      if (key === "rp" || key === "up" || key === "np") {
+        return round2(toNum(v[key]) * multiplier);
+      }
+      if (key === "tp" || key === "sl") {
+        return Math.round(toNum(v[key]));
+      }
+      return v[key];
+    }
+
+    function parseIntegratedTotalResult(arrayBuffer) {
+      if (!window.XLSX) throw new Error("XLSX 라이브러리가 로드되지 않았습니다.");
+
+      const wb = XLSX.read(arrayBuffer, { type: "array" });
+      const sheet = wb.Sheets["Total_Result"] || wb.Sheets[wb.SheetNames[0]];
+      if (!sheet) throw new Error("시트를 찾을 수 없습니다.");
+
+      const aoa = XLSX.utils.sheet_to_json(sheet, {
+        header: 1,
+        defval: "",
+        blankrows: false,
+        raw: true
+      });
+
+      let headerRowIdx = -1;
+      const MAX_SCAN = Math.min(aoa.length, 200);
+      for (let r = 0; r < MAX_SCAN; r++) {
+        const row = aoa[r] || [];
+        const hasGroupName = row.some(cell => String(cell).trim() === "Group Name" || String(cell).trim() === "그룹명");
+        if (hasGroupName) {
+          headerRowIdx = r;
+          break;
+        }
       }
 
-      if (value && typeof value === 'object') {
-        if (typeof value.result === 'number') {
-          const oldFormula = value.formula || null;
-          cell.value = {
-            formula: oldFormula ? `(${oldFormula})*(${multiplier})` : undefined,
-            result: roundSmart(value.result * multiplier),
-            date1904: value.date1904
-          };
-          return true;
+      if (headerRowIdx === -1) {
+        throw new Error("‘Group Name’(또는 ‘그룹명’) 헤더 행을 찾지 못했습니다. 파일 형식을 확인하세요.");
+      }
+
+      const header = (aoa[headerRowIdx] || []).map(x => String(x).trim());
+      const rows = [];
+
+      for (let r = headerRowIdx + 1; r < aoa.length; r++) {
+        const row = aoa[r] || [];
+        const nonEmpty = row.some(v => String(v).trim() !== "");
+        if (!nonEmpty) continue;
+
+        const obj = {};
+        for (let c = 0; c < header.length; c++) {
+          const key = header[c];
+          if (!key) continue;
+          obj[key] = row[c];
         }
 
-        if (typeof value.formula === 'string' && typeof value.result !== 'number') {
-          cell.value = {
-            formula: `(${value.formula})*(${multiplier})`
-          };
-          return true;
+        const gname = String(obj["Group Name"] || obj["그룹명"] || "").trim();
+        if (!gname) continue;
+        rows.push(obj);
+      }
+
+      return rows;
+    }
+
+    function addLogicGroup() {
+      logicGroups.push({
+        id: uid(),
+        subtitle: "",
+        files: [],
+        collapsed: false,
+        merged: {}
+      });
+      renderLogicGroups();
+      renderAll();
+    }
+
+    function deleteLogicGroup(id) {
+      if (!confirm("이 로직 집단을 삭제할까요?")) return;
+      logicGroups = logicGroups.filter(g => g.id !== id);
+      renderLogicGroups();
+      renderAll();
+    }
+
+    function toggleLogicGroup(id) {
+      const g = logicGroups.find(x => x.id === id);
+      if (!g) return;
+      g.collapsed = !g.collapsed;
+      renderLogicGroups();
+    }
+
+    function updateSubtitle(id, value) {
+      const g = logicGroups.find(x => x.id === id);
+      if (!g) return;
+      g.subtitle = value;
+      renderLogicGroups();
+      renderAll();
+    }
+
+    async function addFilesToGroup(id, event) {
+      const g = logicGroups.find(x => x.id === id);
+      if (!g) return;
+
+      if (!window.XLSX) {
+        alert("엑셀 파서(XLSX) 라이브러리가 로드되지 않았습니다. 새로고침 후 다시 시도하세요.");
+        event.target.value = "";
+        return;
+      }
+
+      const files = Array.from(event.target.files || []);
+      if (files.length === 0) return;
+
+      for (const file of files) {
+        try {
+          const buf = await file.arrayBuffer();
+          const rows = parseIntegratedTotalResult(buf);
+          g.files.push({ name: file.name, rows: rows });
+        } catch (e) {
+          alert(`파일 ${file.name} 파싱 실패: ${e.message}`);
         }
       }
 
-      return false;
+      event.target.value = "";
+      renderLogicGroups();
+      renderAll();
     }
 
-    function roundSmart(num) {
-      return Math.round((num + Number.EPSILON) * 100000000) / 100000000;
+    function removeFileFromGroup(id, idx) {
+      const g = logicGroups.find(x => x.id === id);
+      if (!g) return;
+      g.files.splice(idx, 1);
+      renderLogicGroups();
+      renderAll();
     }
 
-    function getOutputFileName(originalName, multiplier) {
-      const dotIndex = originalName.lastIndexOf('.');
-      const base = dotIndex >= 0 ? originalName.slice(0, dotIndex) : originalName;
-      const ext = dotIndex >= 0 ? originalName.slice(dotIndex) : '.xlsx';
-      return `${base}_손익${String(multiplier).replace(/\./g, '_')}배${ext}`;
+    function rebuildMerged() {
+      for (const g of logicGroups) {
+        const map = {};
+
+        for (const f of g.files) {
+          for (const row of (f.rows || [])) {
+            const name = String(row["Group Name"] || row["그룹명"] || "").trim();
+            if (!name) continue;
+
+            if (!map[name]) map[name] = { tp: 0, sl: 0, rp: 0, up: 0, np: 0 };
+
+            map[name].tp += toNum(row["익절횟수"]);
+            map[name].sl += toNum(row["손절횟수"]);
+            map[name].rp += toNum(row["확정손익금"]);
+            map[name].up += toNum(row["미실현손익"]);
+            map[name].np += toNum(row["순이익"]);
+          }
+        }
+
+        g.merged = map;
+      }
     }
 
-    async function processWorkbook(file, multiplier, targets) {
-      const workbook = new ExcelJS.Workbook();
-      const buffer = await file.arrayBuffer();
-      await workbook.xlsx.load(buffer);
+    function getAllGroupNames() {
+      const set = new Set();
+      for (const g of logicGroups) {
+        for (const name of Object.keys(g.merged || {})) set.add(name);
+      }
+      return Array.from(set).sort((a, b) => a.localeCompare(b));
+    }
 
-      let totalChanged = 0;
-      let totalFound = 0;
-      const targetSet = new Set(targets);
+    function renderLogicGroups() {
+      const container = document.getElementById("logicGroupsContainer");
+      container.innerHTML = "";
 
-      workbook.worksheets.forEach((worksheet) => {
-        let sheetFound = 0;
-        let sheetChanged = 0;
+      if (logicGroups.length === 0) {
+        container.innerHTML = `<div class="hint" style="padding:8px 2px;">로직 집단을 추가하세요.</div>`;
+        return;
+      }
 
-        worksheet.eachRow({ includeEmpty: false }, (row) => {
-          row.eachCell({ includeEmpty: false }, (cell, colNumber) => {
-            const cellText = String(cell.text ?? cell.value ?? '').trim();
+      logicGroups.forEach((g, idx) => {
+        const logicLabel = `로직${idx + 1}`;
+        const subtitle = g.subtitle ? escapeHtml(g.subtitle) : "<span style='color:#999;'>부제목 없음</span>";
 
-            if (!targetSet.has(cellText)) return;
+        const filesHtml = (g.files || []).map((f, i) => {
+          return `
+            <div class="file-item">
+              <span class="file-name">${escapeHtml(f.name)}</span>
+              <button class="btn-small" onclick="removeFileFromGroup('${g.id}', ${i})">제거</button>
+            </div>
+          `;
+        }).join("");
 
-            sheetFound += 1;
-            totalFound += 1;
+        const html = `
+          <div class="logic-group">
+            <div class="logic-group-header" onclick="toggleLogicGroup('${g.id}')">
+              <div>
+                <div class="logic-group-title">
+                  <span class="toggle-icon ${g.collapsed ? "collapsed" : ""}">▼</span>
+                  ${logicLabel}
+                </div>
+                <div class="logic-group-subtitle">${subtitle}</div>
+              </div>
+              <div class="logic-group-header-controls">
+                <button class="delete-logic-group" onclick="event.stopPropagation(); deleteLogicGroup('${g.id}')">삭제</button>
+              </div>
+            </div>
 
-            const targetCell = row.getCell(colNumber + 1);
-            const changed = multiplyCellValue(targetCell, multiplier);
+            <div class="logic-group-content ${g.collapsed ? "hidden" : ""}">
+              <div class="field">
+                <label>부제목 (예: 313 - 15%)</label>
+                <input type="text" value="${escapeHtml(g.subtitle || "")}" placeholder="예: 313 - 15%"
+                  onchange="updateSubtitle('${g.id}', this.value)" />
+              </div>
 
-            if (changed) {
-              sheetChanged += 1;
-              totalChanged += 1;
-            }
-          });
+              <div class="field">
+                <label>엑셀 업로드 (여러 개 가능)</label>
+                <input type="file" accept=".xlsx,.xls,.csv" multiple onchange="addFilesToGroup('${g.id}', event)" />
+              </div>
+
+              <div>
+                ${filesHtml || `<div class="hint" style="padding:2px 2px;">업로드된 파일 없음</div>`}
+              </div>
+            </div>
+          </div>
+        `;
+
+        container.insertAdjacentHTML("beforeend", html);
+      });
+    }
+
+    function shouldHighlightCell(groupName, g, filterStopLoss, filterPositiveProfit, filterPositiveRealizedProfit, stopLossThreshold, multiplier) {
+      const has = !!(g.merged && g.merged[groupName]);
+      if (!has) return false;
+
+      const v = g.merged[groupName];
+      const tests = [];
+
+      if (filterStopLoss) tests.push(toNum(v.sl) <= stopLossThreshold);
+      if (filterPositiveProfit) tests.push(toNum(getMetricValue(v, "np", multiplier)) > 0);
+      if (filterPositiveRealizedProfit) tests.push(toNum(getMetricValue(v, "rp", multiplier)) > 0);
+
+      if (tests.length === 0) return false;
+      return tests.every(Boolean);
+    }
+
+    function renderResultTable() {
+      const thead = document.getElementById("resultThead");
+      const tbody = document.getElementById("resultTbody");
+
+      const filterStopLoss = document.getElementById("filterStopLoss").checked;
+      const filterPositiveProfit = document.getElementById("filterPositiveProfit").checked;
+      const filterPositiveRealizedProfit = document.getElementById("filterPositiveRealizedProfit").checked;
+      const stopLossThreshold = parseInt(document.getElementById("stopLossThreshold").value, 10) || 0;
+      const multiplier = getMultiplier();
+
+      document.getElementById("stopLossThreshold").disabled = !filterStopLoss;
+
+      if (logicGroups.length === 0) {
+        thead.innerHTML = "";
+        tbody.innerHTML = `<tr><td style="padding:18px; color:#999; text-align:center;">로직 집단이 없습니다. 왼쪽에서 로직 집단을 추가하세요.</td></tr>`;
+        return;
+      }
+
+      const allNames = getAllGroupNames();
+      const logicCount = logicGroups.length;
+      const totalCols = 2 + logicCount * 2 + Math.max(0, logicCount - 1);
+
+      let h1 = `<tr>
+        <th style="min-width:60px;">NO</th>
+        <th style="min-width:180px;">그룹명</th>
+      `;
+      logicGroups.forEach((g, idx) => {
+        h1 += `<th colspan="2" style="min-width:160px;">로직${idx + 1}</th>`;
+        if (idx !== logicCount - 1) h1 += `<th class="spacer-th"></th>`;
+      });
+      h1 += `</tr>`;
+      thead.innerHTML = h1;
+
+      if (allNames.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="${totalCols}" style="padding:18px; color:#999; text-align:center;">업로드된 데이터가 없습니다.</td></tr>`;
+        return;
+      }
+
+      let html = "";
+
+      allNames.forEach((name, i) => {
+        html += `<tr>`;
+        html += `<td rowspan="6">${i + 1}</td>`;
+        html += `<td rowspan="6" class="group-name">${escapeHtml(name)}</td>`;
+        logicGroups.forEach((g, idx) => {
+          html += `<td colspan="2" class="subtitle-cell">${escapeHtml(g.subtitle || "")}</td>`;
+          if (idx !== logicCount - 1) html += `<td class="spacer-td"></td>`;
         });
+        html += `</tr>`;
 
-        log(`[${worksheet.name}] 대상 라벨 ${sheetFound}개 발견 / 값 변경 ${sheetChanged}개`);
+        const metricRows = [
+          { label: "익절횟수",   key: "tp", fmt: (v) => (v === "" ? "" : fmtInt(v)) },
+          { label: "손절횟수",   key: "sl", fmt: (v) => (v === "" ? "" : fmtInt(v)) },
+          { label: "확정손익금", key: "rp", fmt: (v) => (v === "" ? "" : fmtFloat2(v)) },
+          { label: "미실현손익", key: "up", fmt: (v) => (v === "" ? "" : fmtFloat2(v)) },
+          { label: "순이익",     key: "np", fmt: (v) => (v === "" ? "" : fmtFloat2(v)) }
+        ];
+
+        metricRows.forEach(m => {
+          html += `<tr>`;
+          logicGroups.forEach((g, idx) => {
+            const exists = (g.merged && g.merged[name]);
+            const source = exists ? g.merged[name] : null;
+            const displayValue = exists ? getMetricValue(source, m.key, multiplier) : "";
+
+            const isHL = shouldHighlightCell(
+              name,
+              g,
+              filterStopLoss,
+              filterPositiveProfit,
+              filterPositiveRealizedProfit,
+              stopLossThreshold,
+              multiplier
+            );
+
+            html += `<td class="metric ${isHL ? "hl" : ""}">${m.label}</td>`;
+            html += `<td class="${isHL ? "hl" : ""}">${m.fmt(displayValue)}</td>`;
+            if (idx !== logicCount - 1) html += `<td class="spacer-td"></td>`;
+          });
+          html += `</tr>`;
+        });
       });
 
-      log(`총 대상 라벨 발견: ${totalFound}개`);
-      log(`총 값 변경 완료: ${totalChanged}개`);
-
-      if (totalFound === 0) {
-        throw new Error('대상 라벨을 찾지 못했습니다. 라벨명을 다시 확인해 주세요.');
-      }
-
-      if (totalChanged === 0) {
-        throw new Error('대상 라벨은 찾았지만 오른쪽 셀에서 숫자 또는 수식 값을 변경하지 못했습니다. 파일 구조를 확인해 주세요.');
-      }
-
-      return workbook.xlsx.writeBuffer();
+      tbody.innerHTML = html;
     }
 
-    function downloadBuffer(buffer, fileName) {
-      const blob = new Blob([buffer], {
-        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    function renderAll() {
+      rebuildMerged();
+      renderResultTable();
+    }
+
+    function clearAllFilters() {
+      document.getElementById("filterStopLoss").checked = false;
+      document.getElementById("filterPositiveProfit").checked = false;
+      document.getElementById("filterPositiveRealizedProfit").checked = false;
+      document.getElementById("stopLossThreshold").value = "0";
+      renderAll();
+    }
+
+    function downloadResultExcel() {
+      rebuildMerged();
+
+      const allNames = getAllGroupNames();
+      if (logicGroups.length === 0 || allNames.length === 0) {
+        alert("다운로드할 데이터가 없습니다.");
+        return;
+      }
+      if (!window.XLSX) {
+        alert("엑셀 생성(XLSX) 라이브러리가 로드되지 않았습니다. 새로고침 후 다시 시도하세요.");
+        return;
+      }
+
+      const filterStopLoss = document.getElementById("filterStopLoss").checked;
+      const filterPositiveProfit = document.getElementById("filterPositiveProfit").checked;
+      const filterPositiveRealizedProfit = document.getElementById("filterPositiveRealizedProfit").checked;
+      const stopLossThreshold = parseInt(document.getElementById("stopLossThreshold").value, 10) || 0;
+      const multiplier = getMultiplier();
+
+      const logicCount = logicGroups.length;
+      const aoa = [];
+
+      const header = ["NO", "그룹명"];
+      for (let i = 0; i < logicCount; i++) {
+        header.push(`로직${i + 1}`, "");
+        if (i !== logicCount - 1) header.push("");
+      }
+      aoa.push(header);
+
+      allNames.forEach((name, idx) => {
+        const sub = [idx + 1, name];
+        for (let i = 0; i < logicCount; i++) {
+          sub.push(logicGroups[i].subtitle || "", "");
+          if (i !== logicCount - 1) sub.push("");
+        }
+        aoa.push(sub);
+
+        const rows = [
+          { label: "익절횟수",   key: "tp" },
+          { label: "손절횟수",   key: "sl" },
+          { label: "확정손익금", key: "rp" },
+          { label: "미실현손익", key: "up" },
+          { label: "순이익",     key: "np" }
+        ];
+
+        rows.forEach(r => {
+          const line = ["", ""];
+          for (let i = 0; i < logicCount; i++) {
+            const g = logicGroups[i];
+            const exists = (g.merged && g.merged[name]);
+            const source = exists ? g.merged[name] : null;
+            const displayValue = exists ? getMetricValue(source, r.key, multiplier) : "";
+            line.push(r.label, displayValue === "" ? "" : displayValue);
+            if (i !== logicCount - 1) line.push("");
+          }
+          aoa.push(line);
+        });
       });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
+
+      const ws = XLSX.utils.aoa_to_sheet(aoa);
+
+      const cols = [{ wch: 6 }, { wch: 18 }];
+      for (let i = 0; i < logicCount; i++) {
+        cols.push({ wch: 12 }, { wch: 12 });
+        if (i !== logicCount - 1) cols.push({ wch: 3 });
+      }
+      ws["!cols"] = cols;
+
+      const merges = [];
+      for (let i = 0; i < logicCount; i++) {
+        const c0 = logicStartCol(i);
+        merges.push({ s: { r: 0, c: c0 }, e: { r: 0, c: c0 + 1 } });
+      }
+
+      for (let gi = 0; gi < allNames.length; gi++) {
+        const rStart = 1 + gi * 6;
+        merges.push({ s: { r: rStart, c: 0 }, e: { r: rStart + 5, c: 0 } });
+        merges.push({ s: { r: rStart, c: 1 }, e: { r: rStart + 5, c: 1 } });
+
+        for (let i = 0; i < logicCount; i++) {
+          const c0 = logicStartCol(i);
+          merges.push({ s: { r: rStart, c: c0 }, e: { r: rStart, c: c0 + 1 } });
+        }
+      }
+      ws["!merges"] = merges;
+
+      const HL_STYLE = {
+        fill: {
+          patternType: "solid",
+          fgColor: { rgb: "FFE8F5E9" }
+        }
+      };
+
+      for (let gi = 0; gi < allNames.length; gi++) {
+        const groupName = allNames[gi];
+        const rStart = 1 + gi * 6;
+
+        for (let li = 0; li < logicCount; li++) {
+          const g = logicGroups[li];
+          const isHL = shouldHighlightCell(
+            groupName,
+            g,
+            filterStopLoss,
+            filterPositiveProfit,
+            filterPositiveRealizedProfit,
+            stopLossThreshold,
+            multiplier
+          );
+
+          if (!isHL) continue;
+
+          const cLabel = logicStartCol(li);
+          const cVal = cLabel + 1;
+
+          for (let mi = 0; mi < 5; mi++) {
+            const r = rStart + 1 + mi;
+            const addrLabel = XLSX.utils.encode_cell({ r, c: cLabel });
+            const addrVal = XLSX.utils.encode_cell({ r, c: cVal });
+
+            if (!ws[addrLabel]) ws[addrLabel] = { t: "s", v: "" };
+            if (!ws[addrVal]) ws[addrVal] = { t: "s", v: "" };
+
+            ws[addrLabel].s = HL_STYLE;
+            ws[addrVal].s = HL_STYLE;
+          }
+        }
+      }
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "결과");
+
+      const ts = new Date();
+      const stamp = `${ts.getFullYear()}${String(ts.getMonth()+1).padStart(2, "0")}${String(ts.getDate()).padStart(2, "0")}_${String(ts.getHours()).padStart(2, "0")}${String(ts.getMinutes()).padStart(2, "0")}`;
+      const nText = String(multiplier).replace(/\./g, "_");
+
+      XLSX.writeFile(wb, `로직_통합결과_${nText}배_${stamp}.xlsx`, { cellStyles: true });
     }
 
-    sampleBtn.addEventListener('click', () => {
-      targetInput.value = DEFAULT_TARGETS.join(', ');
-      log('대상 라벨을 기본값으로 복원했습니다.', true);
-    });
+    function resetAll() {
+      if (!confirm("전체 초기화할까요? (로직 집단/업로드 파일 모두 삭제)")) return;
+      logicGroups = [];
+      renderLogicGroups();
+      renderAll();
+    }
 
-    runBtn.addEventListener('click', async () => {
-      const file = fileInput.files[0];
-      const multiplier = Number(multiplierInput.value);
-      const targets = parseTargets(targetInput.value);
-
-      log('작업 시작', true);
-
-      if (!file) {
-        log('엑셀 파일을 먼저 선택해 주세요.');
-        return;
-      }
-
-      if (!Number.isFinite(multiplier)) {
-        log('배수(n)는 숫자로 입력해 주세요.');
-        return;
-      }
-
-      if (targets.length === 0) {
-        log('대상 라벨을 1개 이상 입력해 주세요.');
-        return;
-      }
-
-      runBtn.disabled = true;
-
-      try {
-        log(`파일명: ${file.name}`);
-        log(`배수: ${multiplier}`);
-        log(`대상 라벨: ${targets.join(', ')}`);
-
-        const outputBuffer = await processWorkbook(file, multiplier, targets);
-        const outputName = getOutputFileName(file.name, multiplier);
-
-        downloadBuffer(outputBuffer, outputName);
-        log(`다운로드 완료: ${outputName}`);
-      } catch (error) {
-        console.error(error);
-        log(`오류: ${error.message}`);
-      } finally {
-        runBtn.disabled = false;
-      }
+    window.addEventListener("load", () => {
+      addLogicGroup();
     });
   </script>
 </body>
