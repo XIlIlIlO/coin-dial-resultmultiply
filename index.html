@@ -118,7 +118,7 @@
       border-radius: 12px;
       background: #0f172a;
       color: #e5e7eb;
-      min-height: 200px;
+      min-height: 220px;
       white-space: pre-wrap;
       line-height: 1.5;
       font-family: Consolas, Monaco, monospace;
@@ -163,19 +163,18 @@
     <div class="card">
       <h1>엑셀 손익 n배 변환기</h1>
       <p class="desc">
-        원본 엑셀의 구조를 최대한 유지한 채,
+        원본 엑셀의 구조를 최대한 유지한 채
         <strong>확정손익금</strong>, <strong>미실현손익</strong>, <strong>순이익</strong>
-        항목의 <strong>오른쪽 값 셀만</strong> 지정한 배수로 변경합니다.
+        항목의 오른쪽 값 셀만 지정한 배수로 변경합니다.
         <br />
-        이 버전은 원본 파일을 그대로 다시 저장하는 방식이 아니라,
-        <strong>새 워크북을 다시 생성</strong>해서 저장합니다.
+        그리고 <strong>순이익이 양수인 로직 블록 전체</strong>를 초록색으로 다시 표시합니다.
       </p>
 
       <div class="badge-row">
         <span class="badge">새 파일로 재생성</span>
         <span class="badge">병합 셀 유지</span>
         <span class="badge">열 너비 유지</span>
-        <span class="badge">스타일 최대한 유지</span>
+        <span class="badge">초록색 강조 포함</span>
       </div>
 
       <div class="grid">
@@ -198,9 +197,10 @@
       <div id="status" class="status">준비 완료</div>
 
       <div class="hint">
-        처리 방식: 모든 시트를 복사해서 새 워크북으로 만들고,
-        각 시트에서 <b>확정손익금 / 미실현손익 / 순이익</b> 라벨을 찾은 뒤
-        바로 오른쪽 값 셀만 n배로 변경합니다.
+        처리 방식:
+        모든 시트를 새 워크북으로 다시 만들고,
+        <b>확정손익금 / 미실현손익 / 순이익</b>의 오른쪽 값만 n배로 변경한 뒤,
+        <b>순이익이 양수인 블록</b>은 초록색으로 칠합니다.
       </div>
     </div>
   </div>
@@ -213,6 +213,10 @@
     const statusEl = document.getElementById("status");
 
     const TARGET_LABELS = new Set(["확정손익금", "미실현손익", "순이익"]);
+    const GREEN_FILL = {
+      patternType: "solid",
+      fgColor: { rgb: "FFE8F5E9" }
+    };
 
     function log(message, reset = false) {
       if (reset) statusEl.textContent = "";
@@ -338,18 +342,42 @@
       }
     }
 
+    function applyGreenToCell(outWs, addr) {
+      const cell = cloneDeep(outWs[addr] || { t: "s", v: "" });
+      const style = cloneDeep(cell.s || {});
+      style.fill = cloneDeep(GREEN_FILL);
+      cell.s = style;
+      outWs[addr] = cell;
+    }
+
+    function applyGreenBlock(outWs, endRow, labelCol) {
+      const startRow = endRow - 4;
+      const valueCol = labelCol + 1;
+
+      for (let r = startRow; r <= endRow; r++) {
+        const labelAddr = XLSX.utils.encode_cell({ r, c: labelCol });
+        const valueAddr = XLSX.utils.encode_cell({ r, c: valueCol });
+
+        applyGreenToCell(outWs, labelAddr);
+        applyGreenToCell(outWs, valueAddr);
+      }
+    }
+
     function processWorksheet(srcWs, sheetName, multiplier) {
       const outWs = {};
       copySheetMeta(srcWs, outWs);
 
       if (!srcWs["!ref"]) {
-        return { ws: outWs, found: 0, changed: 0 };
+        return { ws: outWs, found: 0, changed: 0, highlighted: 0 };
       }
 
       const range = XLSX.utils.decode_range(srcWs["!ref"]);
-      const hits = [];
+      const targetHits = [];
+      const profitHits = [];
+
       let found = 0;
       let changed = 0;
+      let highlighted = 0;
 
       for (let r = range.s.r; r <= range.e.r; r++) {
         for (let c = range.s.c; c <= range.e.c; c++) {
@@ -361,18 +389,28 @@
           }
 
           const label = normalizeText(getCellText(srcCell));
-          if (!TARGET_LABELS.has(label)) continue;
 
-          found += 1;
-          hits.push({
-            label,
-            row: r,
-            valueCol: c + 1
-          });
+          if (TARGET_LABELS.has(label)) {
+            targetHits.push({
+              label,
+              row: r,
+              labelCol: c,
+              valueCol: c + 1
+            });
+            found += 1;
+          }
+
+          if (label === "순이익") {
+            profitHits.push({
+              row: r,
+              labelCol: c,
+              valueCol: c + 1
+            });
+          }
         }
       }
 
-      for (const hit of hits) {
+      for (const hit of targetHits) {
         const valueAddr = XLSX.utils.encode_cell({ r: hit.row, c: hit.valueCol });
         const srcValueCell = srcWs[valueAddr];
         const num = getNumericCellValue(srcValueCell);
@@ -383,7 +421,18 @@
         changed += 1;
       }
 
-      return { ws: outWs, found, changed };
+      for (const hit of profitHits) {
+        const valueAddr = XLSX.utils.encode_cell({ r: hit.row, c: hit.valueCol });
+        const outValueCell = outWs[valueAddr];
+        const npValue = getNumericCellValue(outValueCell);
+
+        if (npValue !== null && npValue > 0) {
+          applyGreenBlock(outWs, hit.row, hit.labelCol);
+          highlighted += 1;
+        }
+      }
+
+      return { ws: outWs, found, changed, highlighted };
     }
 
     function getOutputFileName(originalName, multiplier) {
@@ -413,6 +462,7 @@
 
       let totalFound = 0;
       let totalChanged = 0;
+      let totalHighlighted = 0;
 
       for (const sheetName of srcWb.SheetNames) {
         const srcWs = srcWb.Sheets[sheetName];
@@ -422,12 +472,14 @@
 
         totalFound += result.found;
         totalChanged += result.changed;
+        totalHighlighted += result.highlighted;
 
-        log(`[${sheetName}] 라벨 발견 ${result.found}개 / 값 변경 ${result.changed}개`);
+        log(`[${sheetName}] 라벨 발견 ${result.found}개 / 값 변경 ${result.changed}개 / 초록 블록 ${result.highlighted}개`);
       }
 
       log(`총 라벨 발견: ${totalFound}개`);
       log(`총 값 변경: ${totalChanged}개`);
+      log(`총 초록 블록: ${totalHighlighted}개`);
 
       if (totalFound === 0) {
         throw new Error("확정손익금 / 미실현손익 / 순이익 라벨을 찾지 못했습니다.");
