@@ -5,51 +5,72 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>엑셀 손익 n배 변환기</title>
 
-  <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+  <script>
+    (function () {
+      function loadFallback() {
+        var s = document.createElement("script");
+        s.src = "https://unpkg.com/xlsx-js-style@1.2.0/dist/xlsx.bundle.js";
+        document.head.appendChild(s);
+      }
+      window.addEventListener("load", function () {
+        if (!window.XLSX) loadFallback();
+      });
+    })();
+  </script>
 
   <style>
     * { box-sizing: border-box; }
+
     body {
       margin: 0;
       font-family: Arial, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
       background: #f5f7fb;
       color: #1f2937;
     }
+
     .wrap {
-      max-width: 900px;
+      max-width: 920px;
       margin: 40px auto;
       padding: 24px;
     }
+
     .card {
       background: #fff;
       border-radius: 16px;
       padding: 24px;
       box-shadow: 0 10px 30px rgba(0,0,0,0.08);
     }
+
     h1 {
       margin: 0 0 12px;
       font-size: 28px;
     }
+
     .desc {
       margin: 0 0 20px;
       line-height: 1.6;
       color: #4b5563;
     }
+
     .grid {
       display: grid;
       grid-template-columns: 1fr 220px;
       gap: 16px;
       margin-bottom: 16px;
     }
+
     .field {
       display: flex;
       flex-direction: column;
       gap: 8px;
     }
+
     label {
       font-weight: 700;
       font-size: 14px;
     }
+
     input[type="file"],
     input[type="number"] {
       width: 100%;
@@ -59,12 +80,14 @@
       font-size: 15px;
       background: #fff;
     }
+
     .actions {
       display: flex;
       gap: 12px;
       flex-wrap: wrap;
       margin-top: 18px;
     }
+
     button {
       border: 0;
       border-radius: 10px;
@@ -73,43 +96,50 @@
       font-weight: 700;
       cursor: pointer;
     }
+
     .primary {
       background: #2563eb;
       color: #fff;
     }
+
     .secondary {
       background: #e5e7eb;
       color: #111827;
     }
+
     button:disabled {
       opacity: 0.5;
       cursor: not-allowed;
     }
+
     .status {
       margin-top: 18px;
       padding: 14px;
       border-radius: 12px;
       background: #0f172a;
       color: #e5e7eb;
-      min-height: 180px;
+      min-height: 200px;
       white-space: pre-wrap;
       line-height: 1.5;
       font-family: Consolas, Monaco, monospace;
       font-size: 13px;
       overflow: auto;
     }
+
     .hint {
       margin-top: 14px;
       color: #6b7280;
       font-size: 14px;
       line-height: 1.6;
     }
+
     .badge-row {
       display: flex;
       gap: 10px;
       flex-wrap: wrap;
       margin-bottom: 12px;
     }
+
     .badge {
       display: inline-block;
       padding: 7px 10px;
@@ -119,6 +149,7 @@
       font-size: 13px;
       font-weight: 700;
     }
+
     @media (max-width: 768px) {
       .grid { grid-template-columns: 1fr; }
       .wrap { margin: 20px auto; padding: 16px; }
@@ -132,19 +163,19 @@
     <div class="card">
       <h1>엑셀 손익 n배 변환기</h1>
       <p class="desc">
-        이미 정리된 엑셀 형식을 그대로 유지하면서
+        원본 엑셀의 구조를 최대한 유지한 채,
         <strong>확정손익금</strong>, <strong>미실현손익</strong>, <strong>순이익</strong>
-        항목의 값만 지정한 배수로 변경합니다.
+        항목의 <strong>오른쪽 값 셀만</strong> 지정한 배수로 변경합니다.
         <br />
-        로직1~로직4뿐 아니라 로직5, 로직6, 로직7 이상으로 늘어나도
-        고정 열 위치에 의존하지 않고 전체 시트를 스캔해서 처리합니다.
+        이 버전은 원본 파일을 그대로 다시 저장하는 방식이 아니라,
+        <strong>새 워크북을 다시 생성</strong>해서 저장합니다.
       </p>
 
       <div class="badge-row">
-        <span class="badge">형식 유지</span>
+        <span class="badge">새 파일로 재생성</span>
         <span class="badge">병합 셀 유지</span>
+        <span class="badge">열 너비 유지</span>
         <span class="badge">스타일 최대한 유지</span>
-        <span class="badge">로직 개수 무관</span>
       </div>
 
       <div class="grid">
@@ -167,10 +198,9 @@
       <div id="status" class="status">준비 완료</div>
 
       <div class="hint">
-        처리 방식:
-        시트 전체에서 <b>확정손익금 / 미실현손익 / 순이익</b> 셀을 찾고,
-        그 바로 오른쪽 숫자 셀만 n배로 바꿉니다.
-        그래서 로직 블록 수가 늘어나도 그대로 동작합니다.
+        처리 방식: 모든 시트를 복사해서 새 워크북으로 만들고,
+        각 시트에서 <b>확정손익금 / 미실현손익 / 순이익</b> 라벨을 찾은 뒤
+        바로 오른쪽 값 셀만 n배로 변경합니다.
       </div>
     </div>
   </div>
@@ -185,15 +215,23 @@
     const TARGET_LABELS = new Set(["확정손익금", "미실현손익", "순이익"]);
 
     function log(message, reset = false) {
-      if (reset) {
-        statusEl.textContent = "";
-      }
+      if (reset) statusEl.textContent = "";
       statusEl.textContent += (statusEl.textContent ? "\n" : "") + message;
       statusEl.scrollTop = statusEl.scrollHeight;
     }
 
+    function cloneDeep(obj) {
+      if (obj == null || typeof obj !== "object") return obj;
+      if (typeof structuredClone === "function") return structuredClone(obj);
+      return JSON.parse(JSON.stringify(obj));
+    }
+
     function roundSmart(num) {
       return Math.round((num + Number.EPSILON) * 100000000) / 100000000;
+    }
+
+    function normalizeText(value) {
+      return String(value ?? "").trim();
     }
 
     function parseNumber(value) {
@@ -201,125 +239,192 @@
         return value;
       }
 
-      if (typeof value === "string") {
-        const cleaned = value.replace(/,/g, "").trim();
-        if (cleaned === "") return null;
-        const parsed = Number(cleaned);
-        return Number.isFinite(parsed) ? parsed : null;
+      if (typeof value !== "string") {
+        return null;
+      }
+
+      let s = value.trim();
+      if (!s) return null;
+
+      let sign = 1;
+
+      if (s.startsWith("(") && s.endsWith(")")) {
+        sign = -1;
+        s = s.slice(1, -1);
+      }
+
+      s = s
+        .replace(/,/g, "")
+        .replace(/₩/g, "")
+        .replace(/원/g, "")
+        .replace(/\s+/g, "");
+
+      const isPercent = s.endsWith("%");
+      if (isPercent) s = s.slice(0, -1);
+
+      const n = Number(s);
+      if (!Number.isFinite(n)) return null;
+
+      return sign * (isPercent ? n / 100 : n);
+    }
+
+    function getCellText(cell) {
+      if (!cell) return "";
+
+      if (typeof cell.w === "string" && cell.w.trim() !== "") {
+        return cell.w.trim();
+      }
+
+      if (typeof cell.v === "string") {
+        return cell.v.trim();
+      }
+
+      if (cell.v == null) return "";
+
+      return String(cell.v).trim();
+    }
+
+    function getNumericCellValue(cell) {
+      if (!cell) return null;
+
+      if (typeof cell.v === "number" && Number.isFinite(cell.v)) {
+        return cell.v;
+      }
+
+      if (typeof cell.v === "string") {
+        const parsed = parseNumber(cell.v);
+        if (parsed !== null) return parsed;
+      }
+
+      if (typeof cell.w === "string") {
+        const parsed = parseNumber(cell.w);
+        if (parsed !== null) return parsed;
       }
 
       return null;
     }
 
-    function getCellDisplayText(cell) {
-      if (!cell) return "";
+    function makeStaticNumberCell(srcCell, newValue) {
+      const nextCell = cloneDeep(srcCell || {});
+      nextCell.t = "n";
+      nextCell.v = roundSmart(newValue);
 
-      if (typeof cell.text === "string" && cell.text.trim() !== "") {
-        return cell.text.trim();
-      }
+      delete nextCell.f;
+      delete nextCell.F;
+      delete nextCell.D;
+      delete nextCell.w;
+      delete nextCell.h;
+      delete nextCell.r;
 
-      const value = cell.value;
-
-      if (typeof value === "string") {
-        return value.trim();
-      }
-
-      if (value && typeof value === "object" && typeof value.richText !== "undefined") {
-        return String(cell.text || "").trim();
-      }
-
-      if (value == null) return "";
-
-      return String(value).trim();
+      return nextCell;
     }
 
-    function multiplyTargetCell(cell, multiplier) {
-      if (!cell) return false;
+    function copySheetMeta(srcWs, outWs) {
+      const metaKeys = [
+        "!ref",
+        "!cols",
+        "!rows",
+        "!merges",
+        "!margins",
+        "!freeze",
+        "!autofilter",
+        "!outline"
+      ];
 
-      const value = cell.value;
+      for (const key of metaKeys) {
+        if (srcWs[key] != null) {
+          outWs[key] = cloneDeep(srcWs[key]);
+        }
+      }
+    }
 
-      if (typeof value === "number" && Number.isFinite(value)) {
-        cell.value = roundSmart(value * multiplier);
-        return true;
+    function processWorksheet(srcWs, sheetName, multiplier) {
+      const outWs = {};
+      copySheetMeta(srcWs, outWs);
+
+      if (!srcWs["!ref"]) {
+        return { ws: outWs, found: 0, changed: 0 };
       }
 
-      if (typeof value === "string") {
-        const parsed = parseNumber(value);
-        if (parsed !== null) {
-          cell.value = roundSmart(parsed * multiplier);
-          return true;
-        }
-        return false;
-      }
+      const range = XLSX.utils.decode_range(srcWs["!ref"]);
+      const hits = [];
+      let found = 0;
+      let changed = 0;
 
-      if (value && typeof value === "object") {
-        if (typeof value.formula === "string") {
-          const formula = value.formula;
-          const resultNum = parseNumber(value.result);
+      for (let r = range.s.r; r <= range.e.r; r++) {
+        for (let c = range.s.c; c <= range.e.c; c++) {
+          const addr = XLSX.utils.encode_cell({ r, c });
+          const srcCell = srcWs[addr];
 
-          cell.value = {
-            formula: `(${formula})*(${multiplier})`,
-            result: resultNum !== null ? roundSmart(resultNum * multiplier) : undefined,
-            shareType: value.shareType,
-            ref: value.ref
-          };
-          return true;
-        }
-
-        if (typeof value.result !== "undefined") {
-          const resultNum = parseNumber(value.result);
-          if (resultNum !== null) {
-            cell.value = roundSmart(resultNum * multiplier);
-            return true;
+          if (srcCell) {
+            outWs[addr] = cloneDeep(srcCell);
           }
+
+          const label = normalizeText(getCellText(srcCell));
+          if (!TARGET_LABELS.has(label)) continue;
+
+          found += 1;
+          hits.push({
+            label,
+            row: r,
+            valueCol: c + 1
+          });
         }
       }
 
-      return false;
+      for (const hit of hits) {
+        const valueAddr = XLSX.utils.encode_cell({ r: hit.row, c: hit.valueCol });
+        const srcValueCell = srcWs[valueAddr];
+        const num = getNumericCellValue(srcValueCell);
+
+        if (num === null) continue;
+
+        outWs[valueAddr] = makeStaticNumberCell(srcValueCell, num * multiplier);
+        changed += 1;
+      }
+
+      return { ws: outWs, found, changed };
     }
 
     function getOutputFileName(originalName, multiplier) {
       const dotIndex = originalName.lastIndexOf(".");
       const base = dotIndex >= 0 ? originalName.slice(0, dotIndex) : originalName;
-      const ext = dotIndex >= 0 ? originalName.slice(dotIndex) : ".xlsx";
       const safeMultiplier = String(multiplier).replace(/\./g, "_");
-      return `${base}_손익${safeMultiplier}배${ext}`;
+      return `${base}_손익${safeMultiplier}배.xlsx`;
     }
 
     async function processWorkbook(file, multiplier) {
-      const workbook = new ExcelJS.Workbook();
-      const buffer = await file.arrayBuffer();
+      if (!window.XLSX) {
+        throw new Error("XLSX 라이브러리가 로드되지 않았습니다.");
+      }
 
-      await workbook.xlsx.load(buffer);
+      const arrayBuffer = await file.arrayBuffer();
+
+      const srcWb = XLSX.read(arrayBuffer, {
+        type: "array",
+        cellStyles: true,
+        cellFormulas: true,
+        cellNF: true,
+        cellText: true,
+        raw: true
+      });
+
+      const outWb = XLSX.utils.book_new();
 
       let totalFound = 0;
       let totalChanged = 0;
 
-      workbook.worksheets.forEach((worksheet) => {
-        let sheetFound = 0;
-        let sheetChanged = 0;
+      for (const sheetName of srcWb.SheetNames) {
+        const srcWs = srcWb.Sheets[sheetName];
+        const result = processWorksheet(srcWs, sheetName, multiplier);
 
-        worksheet.eachRow({ includeEmpty: true }, (row) => {
-          row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
-            const label = getCellDisplayText(cell);
+        XLSX.utils.book_append_sheet(outWb, result.ws, sheetName);
 
-            if (!TARGET_LABELS.has(label)) return;
+        totalFound += result.found;
+        totalChanged += result.changed;
 
-            sheetFound += 1;
-            totalFound += 1;
-
-            const valueCell = row.getCell(colNumber + 1);
-            const changed = multiplyTargetCell(valueCell, multiplier);
-
-            if (changed) {
-              sheetChanged += 1;
-              totalChanged += 1;
-            }
-          });
-        });
-
-        log(`[${worksheet.name}] 라벨 발견 ${sheetFound}개 / 값 변경 ${sheetChanged}개`);
-      });
+        log(`[${sheetName}] 라벨 발견 ${result.found}개 / 값 변경 ${result.changed}개`);
+      }
 
       log(`총 라벨 발견: ${totalFound}개`);
       log(`총 값 변경: ${totalChanged}개`);
@@ -332,23 +437,15 @@
         throw new Error("라벨은 찾았지만 오른쪽 값 셀을 숫자로 처리하지 못했습니다.");
       }
 
-      return await workbook.xlsx.writeBuffer();
+      return outWb;
     }
 
-    function downloadBuffer(buffer, fileName) {
-      const blob = new Blob(
-        [buffer],
-        { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }
-      );
-
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
+    function downloadWorkbook(workbook, fileName) {
+      XLSX.writeFile(workbook, fileName, {
+        bookType: "xlsx",
+        cellStyles: true,
+        compression: true
+      });
     }
 
     resetBtn.addEventListener("click", () => {
@@ -379,10 +476,10 @@
         log(`파일명: ${file.name}`);
         log(`배수: ${multiplier}`);
 
-        const outputBuffer = await processWorkbook(file, multiplier);
+        const outWb = await processWorkbook(file, multiplier);
         const outputName = getOutputFileName(file.name, multiplier);
 
-        downloadBuffer(outputBuffer, outputName);
+        downloadWorkbook(outWb, outputName);
         log(`다운로드 완료: ${outputName}`);
       } catch (error) {
         console.error(error);
